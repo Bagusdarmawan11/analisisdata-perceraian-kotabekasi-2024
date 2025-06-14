@@ -58,7 +58,7 @@ def load_data(file_path):
         return None
 
 # --- Load Data ---
-df = load_data('Data Presentasii.xlsx')
+df = load_data('dashboard/Data Presentasii.xlsx')
 
 if df is not None:
     # --- Sidebar untuk Filter ---
