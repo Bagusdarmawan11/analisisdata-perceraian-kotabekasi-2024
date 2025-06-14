@@ -1,223 +1,172 @@
+# dashboard_app.py
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-import numpy as np
+import warnings
 
-# Konfigurasi halaman Streamlit agar lebih lebar
-st.set_page_config(layout="wide")
+warnings.filterwarnings('ignore')
 
-# --- Fungsi-fungsi dari Notebook ---
-# Menggunakan cache agar data tidak di-load ulang setiap ada interaksi
+# ----------------- KONFIGURASI HALAMAN -----------------
+st.set_page_config(
+    page_title="Dashboard Analisis Perceraian",
+    page_icon="💔",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ----------------- JUDUL DAN DESKRIPSI -----------------
+st.title("📊 Dashboard Analisis Data Perceraian Kota Bekasi")
+st.markdown("""
+Dashboard ini menyajikan analisis mendalam mengenai data perkara perceraian yang terdaftar di Pengadilan Agama Bekasi. 
+Gunakan filter di samping untuk menelusuri data.
+""")
+
+# ----------------- FUNGSI UNTUK MEMUAT DATA -----------------
+# Menggunakan cache agar data hanya dimuat sekali
 @st.cache_data
 def load_data(file_path):
     """
-    Fungsi untuk memuat dan membersihkan data dari file Excel,
-    diadaptasi dari notebook.
+    Fungsi untuk memuat dan melakukan pembersihan dasar pada data.
     """
     try:
-        df = pd.read_excel(file_path, sheet_name='Perdata Agama')
-        df = df.drop(df.index[0])
-        df = df.reset_index(drop=True)
-        df = df.dropna(subset=['Nomor Putusan'])
-        df.columns = [
-            'nomor_putusan', 'domisili', 'jk_penggugat', 'jk_tergugat',
-            'tgl_nikah', 'tgl_cerai', 'umur_nikah', 'jml_bulan',
-            'alasan_pertengkaran', 'alasan_selingkuh', 'alasan_kdrt',
-            'alasan_ekonomi', 'status_gugatan'
-        ]
-        
-        df['tgl_nikah'] = pd.to_datetime(df['tgl_nikah'], errors='coerce')
-        df['tgl_cerai'] = pd.to_datetime(df['tgl_cerai'], errors='coerce')
-        
-        # Mengubah tipe data kolom alasan menjadi numerik untuk korelasi
-        alasan_cols = ['alasan_pertengkaran', 'alasan_selingkuh', 'alasan_kdrt', 'alasan_ekonomi']
-        for col in alasan_cols:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-        df[alasan_cols] = df[alasan_cols].fillna(0).astype(int)
-
-        def get_main_reason(row):
-            if row['alasan_pertengkaran'] == 1:
-                return 'Pertengkaran'
-            elif row['alasan_selingkuh'] == 1:
-                return 'Perselingkuhan'
-            elif row['alasan_kdrt'] == 1:
-                return 'KDRT'
-            elif row['alasan_ekonomi'] == 1:
-                return 'Ekonomi'
-            else:
-                return 'Tidak Diketahui'
-
-        df['alasan_utama'] = df.apply(get_main_reason, axis=1)
-        df['tahun_cerai'] = df['tgl_cerai'].dt.year
-        df['tahun_nikah'] = df['jml_bulan'] / 12
-
+        df = pd.read_csv(file_path)
+        # Asumsi nama kolom berdasarkan konteks, sesuaikan jika perlu
+        # Mengubah kolom 'Tahun' menjadi tipe data integer
+        if 'Tahun' in df.columns:
+            df['Tahun'] = pd.to_numeric(df['Tahun'], errors='coerce').dropna().astype(int)
+        # Membersihkan spasi ekstra pada kolom teks
+        if 'Jenis Perkara' in df.columns:
+            df['Jenis Perkara'] = df['Jenis Perkara'].str.strip()
+        if 'Faktor Penyebab' in df.columns:
+            df['Faktor Penyebab'] = df['Faktor Penyebab'].str.strip()
         return df
+    except FileNotFoundError:
+        st.error(f"File tidak ditemukan di path: {file_path}. Pastikan file CSV Anda berada di direktori yang sama dengan script ini.")
+        return None
     except Exception as e:
-        st.error(f"Error saat memuat data: {e}")
+        st.error(f"Terjadi kesalahan saat memuat data: {e}")
         return None
 
-# --- Load Data ---
-df = load_data('dashboard/Data Presentasii.xlsx')
+# Ganti dengan path file CSV Anda
+file_path = 'Data Presentasii.xlsx - Perdata Agama.csv'
+df = load_data(file_path)
 
-if df is not None:
-    # --- Sidebar untuk Filter ---
-    st.sidebar.header("Filter Data")
 
-    # Filter Tahun
-    min_year = int(df['tahun_cerai'].min())
-    max_year = int(df['tahun_cerai'].max())
-    selected_year_range = st.sidebar.slider(
-        "Pilih Rentang Tahun Perceraian:",
-        min_value=min_year,
-        max_value=max_year,
-        value=(min_year, max_year)
+# Hentikan aplikasi jika data gagal dimuat
+if df is None:
+    st.stop()
+
+# ----------------- SIDEBAR UNTUK FILTER -----------------
+st.sidebar.header("🔍 Filter Data")
+
+# Filter berdasarkan Tahun
+if 'Tahun' in df.columns:
+    unique_years = sorted(df['Tahun'].unique())
+    selected_year = st.sidebar.multiselect(
+        "Pilih Tahun:",
+        options=unique_years,
+        default=unique_years
     )
-
-    # Filter Domisili
-    domisili_options = ['Semua'] + sorted(df['domisili'].unique().tolist())
-    selected_domisili = st.sidebar.multiselect(
-        "Pilih Domisili:",
-        options=domisili_options,
-        default=['Semua']
-    )
-
-    # --- Terapkan Filter ---
-    df_filtered = df[
-        (df['tahun_cerai'] >= selected_year_range[0]) &
-        (df['tahun_cerai'] <= selected_year_range[1])
-    ]
-
-    if 'Semua' not in selected_domisili:
-        df_filtered = df_filtered[df_filtered['domisili'].isin(selected_domisili)]
-
-    # --- Judul Dashboard ---
-    st.title("📊 Dashboard Analisis Data Perceraian Kota Bekasi")
-    st.markdown("Dashboard interaktif untuk visualisasi data perkara perdata agama.")
-
-    # --- Ringkasan Utama (KPIs) ---
-    st.header("Ringkasan Utama")
-    
-    total_cases = len(df_filtered)
-    if total_cases > 0:
-      dikabulkan = len(df_filtered[df_filtered['status_gugatan'] == 'Dikabulkan'])
-      success_rate = (dikabulkan / total_cases) * 100 if total_cases > 0 else 0
-      avg_duration = df_filtered['tahun_nikah'].mean()
-      most_common_reason = df_filtered['alasan_utama'].mode()[0]
-    else:
-      dikabulkan = 0
-      success_rate = 0
-      avg_duration = 0
-      most_common_reason = "N/A"
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Kasus", f"{total_cases}")
-    with col2:
-        st.metric("Tingkat Dikabulkan", f"{success_rate:.1f}%")
-    with col3:
-        st.metric("Rata-rata Durasi Nikah", f"{avg_duration:.1f} Tahun")
-    with col4:
-        st.metric("Alasan Utama", most_common_reason)
-
-    st.markdown("---")
-
-    # --- Analisis Demografis & Alasan Perceraian ---
-    st.header("Analisis Demografis & Alasan Perceraian")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # Pie Chart: Alasan Utama
-        alasan_counts = df_filtered['alasan_utama'].value_counts().reset_index()
-        alasan_counts.columns = ['alasan', 'jumlah']
-        fig_pie_alasan = px.pie(alasan_counts, names='alasan', values='jumlah',
-                                title='Distribusi Alasan Utama Perceraian', hole=0.3)
-        st.plotly_chart(fig_pie_alasan, use_container_width=True)
-
-    with col2:
-        # Pie Chart: Jenis Kelamin Penggugat
-        gender_counts = df_filtered['jk_penggugat'].value_counts().reset_index()
-        gender_counts.columns = ['gender', 'jumlah']
-        fig_pie_gender = px.pie(gender_counts, names='gender', values='jumlah',
-                                title='Distribusi Jenis Kelamin Penggugat', hole=0.3)
-        st.plotly_chart(fig_pie_gender, use_container_width=True)
-    
-    col3, col4 = st.columns(2)
-
-    with col3:
-        # Bar Chart: Top Domisili
-        domisili_counts = df_filtered['domisili'].value_counts().head(10).reset_index()
-        domisili_counts.columns = ['domisili', 'jumlah']
-        fig_bar_domisili = px.bar(domisili_counts.sort_values('jumlah'), y='domisili', x='jumlah', orientation='h',
-                                  title='Top 10 Domisili Penggugat')
-        st.plotly_chart(fig_bar_domisili, use_container_width=True)
-
-    with col4:
-        # Bar Chart: Status Gugatan
-        status_counts = df_filtered['status_gugatan'].value_counts().reset_index()
-        status_counts.columns = ['status', 'jumlah']
-        fig_bar_status = px.bar(status_counts, x='status', y='jumlah',
-                                title='Distribusi Status Gugatan')
-        st.plotly_chart(fig_bar_status, use_container_width=True)
-
-    st.markdown("---")
-
-
-    # --- Analisis Temporal ---
-    st.header("Analisis Temporal")
-    col1, col2 = st.columns(2)
-    with col1:
-        # Line Chart: Tren Tahunan
-        yearly_counts = df_filtered.groupby('tahun_cerai').size().reset_index(name='jumlah')
-        fig_line_trend = px.line(yearly_counts, x='tahun_cerai', y='jumlah',
-                                 title='Tren Jumlah Perkara per Tahun', markers=True)
-        fig_line_trend.update_xaxes(title='Tahun')
-        fig_line_trend.update_yaxes(title='Jumlah Kasus')
-        st.plotly_chart(fig_line_trend, use_container_width=True)
-        
-    with col2:
-        # Histogram: Durasi Pernikahan
-        df_duration = df_filtered.dropna(subset=['tahun_nikah'])
-        fig_hist_duration = px.histogram(df_duration, x='tahun_nikah', nbins=20,
-                                         title='Distribusi Durasi Pernikahan (Tahun)')
-        fig_hist_duration.update_xaxes(title='Durasi Pernikahan (Tahun)')
-        st.plotly_chart(fig_hist_duration, use_container_width=True)
-
-    st.markdown("---")
-
-
-    # --- Analisis Lanjutan Interaktif ---
-    st.header("Analisis Interaktif Lanjutan")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        # Sunburst Chart: Alasan berdasarkan Gender
-        df_sunburst = df_filtered.groupby(['jk_penggugat', 'alasan_utama']).size().reset_index(name='count')
-        fig_sunburst = px.sunburst(
-            df_sunburst,
-            path=['jk_penggugat', 'alasan_utama'],
-            values='count',
-            title='Sebaran Alasan berdasarkan Gender Penggugat'
-        )
-        st.plotly_chart(fig_sunburst, use_container_width=True)
-
-    with col2:
-        # Box Plot: Durasi Pernikahan berdasarkan Alasan
-        df_box = df_filtered.dropna(subset=['tahun_nikah'])
-        fig_box = px.box(
-            df_box,
-            x='alasan_utama',
-            y='tahun_nikah',
-            title='Distribusi Durasi Nikah per Alasan',
-            labels={'alasan_utama': 'Alasan Perceraian', 'tahun_nikah': 'Durasi Pernikahan (Tahun)'}
-        )
-        st.plotly_chart(fig_box, use_container_width=True)
-
-    st.markdown("---")
-
-    # --- Data Mentah ---
-    with st.expander("Lihat Data Mentah yang Difilter"):
-        st.dataframe(df_filtered)
-
 else:
-    st.warning("Data tidak berhasil dimuat. Pastikan file 'Data Presentasii.xlsx' berada di folder yang sama.")
+    selected_year = []
+
+# Filter berdasarkan Jenis Perkara
+if 'Jenis Perkara' in df.columns:
+    unique_cases = sorted(df['Jenis Perkara'].unique())
+    selected_case = st.sidebar.multiselect(
+        "Pilih Jenis Perkara:",
+        options=unique_cases,
+        default=unique_cases
+    )
+else:
+    selected_case = []
+
+# Filter data berdasarkan pilihan di sidebar
+if selected_year and 'Tahun' in df.columns:
+    df_filtered = df[df['Tahun'].isin(selected_year)]
+else:
+    df_filtered = df.copy()
+
+if selected_case and 'Jenis Perkara' in df.columns:
+    df_filtered = df_filtered[df_filtered['Jenis Perkara'].isin(selected_case)]
+
+
+# ----------------- TAMPILAN UTAMA -----------------
+st.header("📈 Visualisasi Data")
+
+# Membuat 2 kolom utama
+col1, col2 = st.columns((4, 3)) 
+
+with col1:
+    # --- Grafik 1: Tren Jumlah Kasus per Tahun ---
+    st.subheader("Tren Kasus Tahunan")
+    if 'Tahun' in df_filtered.columns:
+        yearly_cases = df_filtered.groupby('Tahun').size().reset_index(name='Jumlah Kasus')
+        fig_yearly = px.line(
+            yearly_cases, 
+            x='Tahun', 
+            y='Jumlah Kasus', 
+            markers=True,
+            template='plotly_white'
+        )
+        fig_yearly.update_layout(xaxis_title="Tahun", yaxis_title="Jumlah Kasus")
+        st.plotly_chart(fig_yearly, use_container_width=True)
+    else:
+        st.warning("Kolom 'Tahun' tidak ditemukan untuk membuat grafik tren.")
+
+with col2:
+    # --- Grafik 2: Komposisi Jenis Perkara ---
+    st.subheader("Komposisi Jenis Perkara")
+    if 'Jenis Perkara' in df_filtered.columns:
+        case_composition = df_filtered['Jenis Perkara'].value_counts().reset_index()
+        case_composition.columns = ['Jenis Perkara', 'Jumlah']
+        fig_pie = px.pie(
+            case_composition,
+            names='Jenis Perkara',
+            values='Jumlah',
+            hole=0.4,
+            template='plotly_white'
+        )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig_pie, use_container_width=True)
+    else:
+        st.warning("Kolom 'Jenis Perkara' tidak ditemukan untuk membuat grafik komposisi.")
+
+
+# --- Grafik 3: Faktor Penyebab Utama Perceraian (Horizontal Bar Chart) ---
+st.subheader("Faktor Penyebab Utama Perceraian")
+if 'Faktor Penyebab' in df_filtered.columns:
+    # Mengambil top 10 faktor penyebab
+    top_factors = df_filtered['Faktor Penyebab'].value_counts().nlargest(10).sort_values(ascending=True)
+    fig_factors = px.bar(
+        top_factors,
+        x=top_factors.values,
+        y=top_factors.index,
+        orientation='h',
+        template='plotly_white',
+        labels={'x': 'Jumlah Kasus', 'y': 'Faktor Penyebab'}
+    )
+    fig_factors.update_layout(yaxis={'categoryorder':'total ascending'})
+    st.plotly_chart(fig_factors, use_container_width=True)
+else:
+    st.warning("Kolom 'Faktor Penyebab' tidak ditemukan untuk membuat grafik ini.")
+
+
+# --- Menampilkan Data Tabel (Opsional) ---
+if st.checkbox("Tampilkan Data Tabel (Hasil Filter)"):
+    st.dataframe(df_filtered)
+
+
+# ----------------- FOOTER -----------------
+st.markdown("---")
+footer_html = """
+<div style="text-align: center; padding: 10px; font-family: sans-serif;">
+    <p>
+        Dibuat dengan ❤️ oleh <strong>[Nama Anda]</strong> menggunakan Streamlit
+        <br>
+        <strong>Sumber Data</strong>: Pengadilan Agama Bekasi (Data Fiktif untuk Simulasi)
+    </p>
+</div>
+"""
+st.markdown(footer_html, unsafe_allow_html=True)
