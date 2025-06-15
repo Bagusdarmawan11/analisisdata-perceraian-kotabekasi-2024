@@ -49,7 +49,7 @@ def load_data(file_path):
         return None
 
 # Ganti dengan path file CSV Anda
-file_path = 'Data Presentasii.xlsx - Perdata Agama.csv'
+file_path = 'Dashboard/Data Presentasii.xlsx - Perdata Agama.csv'
 df = load_data(file_path)
 
 
