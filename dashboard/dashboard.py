@@ -6,7 +6,7 @@ import numpy as np
 # Mengatur konfigurasi halaman (harus menjadi perintah pertama Streamlit)
 st.set_page_config(
     page_title="Dashboard Analisis Perceraian Bekasi",
-    page_icon="💔",
+    page_icon="✹",
     layout="wide"
 )
 
