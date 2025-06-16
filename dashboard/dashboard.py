@@ -161,7 +161,7 @@ st.markdown("---")
 st.markdown(
     """
     <div style="text-align: center;">
-        <p>Dibuat dengan ❤️ oleh: Milda Nabilah Al-hamaz (202210715079)</p>
+        <p>Dibuat oleh: Milda Nabilah Al-hamaz (202210715079)</p>
     </div>
     """,
     unsafe_allow_html=True
