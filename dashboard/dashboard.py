@@ -181,5 +181,14 @@ with st.expander("Lihat Data Mentah (Sesuai Filter)"):
     st.dataframe(df_filtered)
 
 # --- FOOTER ---
-st.markdown("---")
-st.caption("Dibuat dengan ❤️ oleh: Milda Nabilah Al-hamaz (202210715079)")
+st.markdown("---")  # Garis pemisah
+
+# Menggunakan HTML untuk membuat teks berada di tengah
+st.markdown(
+    """
+    <div style="text-align: center;">
+        <p>Dibuat dengan ❤️ oleh: Milda Nabilah Al-hamaz (202210715079)</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
