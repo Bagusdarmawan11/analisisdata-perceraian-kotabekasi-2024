@@ -154,8 +154,7 @@ else:
                 y=alasan_counts.values, 
                 color=alasan_counts.values, 
                 color_continuous_scale='plasma',
-                text_auto=True,
-                title="<b>Pertengkaran Menjadi Alasan Paling Dominan</b>"
+                text_auto=True
             )
             fig_alasan.update_traces(textfont_size=12, textangle=0)
             st.plotly_chart(fig_alasan, use_container_width=True)
