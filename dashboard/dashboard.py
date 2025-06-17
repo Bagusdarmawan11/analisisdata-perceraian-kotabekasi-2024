@@ -28,7 +28,7 @@ def load_and_clean_data():
     
     for col in ['domisili_penggugat', 'jenis_kelamin_penggugat', 'amar_putusan']:
         df[col] = df[col].str.upper()
-        
+
     # --- PERBAIKAN #2.1: Menggabungkan 'TIDAK DIKETAHUI' ke 'PEREMPUAN' ---
     df['jenis_kelamin_penggugat'] = df['jenis_kelamin_penggugat'].replace('TIDAK DIKETAHUI', 'PEREMPUAN')
         
@@ -47,13 +47,13 @@ def load_and_clean_data():
     kecamatan_lainnya = kecamatan_counts[kecamatan_counts < threshold_kecamatan].index
     df['domisili_penggugat'] = df['domisili_penggugat'].replace(kecamatan_lainnya, 'LAIN-LAIN')
     
-    main_df_copy = df.copy()
-    usia_nikah_counts = main_df_copy['grup_usia_nikah'].value_counts()
+    usia_nikah_counts = df['grup_usia_nikah'].value_counts()
     threshold_usia = 20
     repl_usia = usia_nikah_counts[usia_nikah_counts < threshold_usia].index
-    main_df_copy['grup_usia_nikah'] = main_df_copy['grup_usia_nikah'].cat.add_categories(['Lain-lain'])
-    main_df_copy.loc[main_df_copy['grup_usia_nikah'].isin(repl_usia), 'grup_usia_nikah'] = 'Lain-lain'
-    main_df_copy['grup_usia_nikah'] = main_df_copy['grup_usia_nikah'].cat.remove_unused_categories()
+    if not repl_usia.empty:
+        df['grup_usia_nikah'] = df['grup_usia_nikah'].cat.add_categories(['Lain-lain'])
+        df.loc[df['grup_usia_nikah'].isin(repl_usia), 'grup_usia_nikah'] = 'Lain-lain'
+        df['grup_usia_nikah'] = df['grup_usia_nikah'].cat.remove_unused_categories()
     
     df['jumlah_alasan'] = df[['pertengkaran', 'ekonomi', 'perselingkuhan', 'kdrt']].sum(axis=1)
 
@@ -67,7 +67,6 @@ kecamatan_options = ['Semua Kecamatan'] + sorted(df['domisili_penggugat'].unique
 selected_kecamatan = st.sidebar.selectbox('Pilih Kecamatan:', kecamatan_options)
 grup_usia_options = ['Semua Grup'] + df['grup_usia_nikah'].cat.categories.tolist()
 selected_grup_usia = st.sidebar.selectbox('Pilih Lama Pernikahan:', grup_usia_options)
-st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Logo_of_the_Supreme_Court_of_the_Republic_of_Indonesia.svg/1200px-Logo_of_the_Supreme_Court_of_the_Republic_of_Indonesia.svg.png", use_column_width='auto')
 
 # --- LOGIKA FILTER ---
 df_filtered = df.copy()
@@ -135,6 +134,7 @@ else:
         with col_t2_2:
             st.subheader("Kompleksitas Masalah per Kasus")
             jumlah_alasan_counts = df_filtered['jumlah_alasan'].value_counts()
+            
             # --- PERBAIKAN #1: Membuat label baru yang lebih deskriptif ---
             jumlah_alasan_counts.index = jumlah_alasan_counts.index.map(lambda x: f"{x} Alasan" if x > 0 else "Tidak Ada Data")
             
@@ -165,21 +165,40 @@ else:
         st.plotly_chart(fig_gender_alasan, use_container_width=True)
 
     with tab3:
-        # Kode untuk Tab 3 tetap sama
         st.header("Analisis Berdasarkan Lama Pernikahan")
-        # ... (sisa kode tab 3)
+        st.subheader("Distribusi Kasus Berdasarkan Grup Usia Pernikahan")
+        usia_nikah_counts = df_filtered['grup_usia_nikah'].value_counts().sort_index()
+        fig_usia_nikah = px.bar(usia_nikah_counts, x=usia_nikah_counts.index, y=usia_nikah_counts.values, color=usia_nikah_counts.values, color_continuous_scale='greens', labels={'x':'Grup Lama Pernikahan', 'y':'Jumlah Kasus'})
+        st.plotly_chart(fig_usia_nikah, use_container_width=True)
+        st.subheader("Perubahan Tren Alasan Seiring Lamanya Pernikahan")
+        alasan_by_usia = df_filtered.groupby('grup_usia_nikah', observed=True)[['pertengkaran', 'ekonomi', 'perselingkuhan', 'kdrt']].sum()
+        alasan_sum = alasan_by_usia.sum(axis=1)
+        alasan_proporsi = alasan_by_usia.div(alasan_sum, axis=0).fillna(0)
+        fig_proporsi = px.bar(alasan_proporsi, x=alasan_proporsi.index, y=alasan_proporsi.columns, template='plotly_white', title="Proporsi Alasan Cerai per Grup Usia Nikah", barmode='stack')
+        st.plotly_chart(fig_proporsi, use_container_width=True)
 
     with tab4:
-        # Kode untuk Tab 4 tetap sama
         st.header("Analisis Pola Berdasarkan Waktu")
-        # ... (sisa kode tab 4)
+        st.subheader("Tren Kasus Perceraian Bulanan")
+        bulan_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+        df_filtered['bulan_putusan'] = pd.Categorical(df_filtered['bulan_putusan'], categories=bulan_order, ordered=True)
+        monthly_counts = df_filtered['bulan_putusan'].value_counts().sort_index()
+        fig_tren = px.line(monthly_counts, x=monthly_counts.index, y=monthly_counts.values, markers=True, labels={'x': 'Bulan', 'y': 'Jumlah Kasus'})
+        fig_tren.update_traces(line_color='royalblue', line_width=3)
+        st.plotly_chart(fig_tren, use_container_width=True)
+        st.subheader("Pola Putusan Berdasarkan Hari dalam Seminggu")
+        hari_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        df_filtered['hari_putusan'] = pd.Categorical(df_filtered['hari_putusan'], categories=hari_order, ordered=True)
+        daily_counts = df_filtered['hari_putusan'].value_counts().sort_index()
+        fig_hari = px.bar(daily_counts, x=daily_counts.index, y=daily_counts.values, color=daily_counts.values, color_continuous_scale='viridis', labels={'x':'Hari', 'y':'Jumlah Kasus'})
+        st.plotly_chart(fig_hari, use_container_width=True)
 
 # --- FOOTER ---
 st.markdown("---")
 st.markdown(
     """
     <div style="text-align: center;">
-        <p>Dibuat dengan ❤️ oleh: Milda Nabilah Al-hamaz (202210715079)</p>
+        <p>Dibuat oleh: Milda Nabilah Al-hamaz (202210715079)</p>
     </div>
     """,
     unsafe_allow_html=True
