@@ -2,7 +2,7 @@
 
 Proyek ini menyajikan analisis mendalam terhadap data putusan perceraian yang dikabulkan oleh Pengadilan Agama Bekasi. Tujuannya adalah untuk mengidentifikasi pola, tren, dan faktor-faktor dominan yang melatarbelakangi kasus perceraian di wilayah ini. Hasil analisis disajikan dalam sebuah dasbor interaktif yang dibangun menggunakan Streamlit.
 
- *(Catatan: Gambar ini adalah contoh ilustrasi. Anda dapat menggantinya dengan tangkapan layar dasbor Anda sendiri)*
+ **➡️ [Dashboard Visualisasi](https://dashboard-visualisasi-data-putusan.streamlit.app/) ⬅️**
 
 ## 📂 Struktur Proyek
 
