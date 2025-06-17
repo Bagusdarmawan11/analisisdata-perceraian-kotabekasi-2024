@@ -10,8 +10,9 @@ Proyek ini menyajikan analisis mendalam terhadap data putusan perceraian yang di
 .
 ├── Dataset-Perceraian.csv      # Kumpulan data mentah kasus perceraian
 ├── Visualisasi_Data_Perceraian.ipynb # Notebook analisis eksplorasi data (EDA)
-├── dashboard.py                # Skrip utama untuk menjalankan aplikasi Streamlit
-├── requirements.txt            # Daftar dependensi Python yang dibutuhkan
+├── Dashboard                   # Skrip utama untuk menjalankan aplikasi Streamlit
+|   ├── dashboard.py
+|   ├── requirements.txt        # Daftar dependensi Python yang dibutuhkan
 └── README.md                   # Dokumentasi proyek (file ini)
 ```
 
