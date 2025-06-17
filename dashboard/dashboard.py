@@ -114,8 +114,7 @@ else:
                 kasus_kecamatan, 
                 y=kasus_kecamatan.index, 
                 x=kasus_kecamatan.values, 
-                orientation='h', 
-                title="<b>Bekasi Utara Menjadi Wilayah dengan Kasus Terbanyak</b>",
+                orientation='h',
                 text_auto=True,
                 color=kasus_kecamatan.values, 
                 color_continuous_scale='blues'
@@ -129,7 +128,6 @@ else:
             fig_gender = px.pie(
                 df_filtered, 
                 names='jenis_kelamin_penggugat', 
-                title="<b>Proporsi Gender Penggugat</b>", 
                 hole=.3, 
                 color_discrete_sequence=px.colors.qualitative.Set2
             )
@@ -137,7 +135,7 @@ else:
             st.plotly_chart(fig_gender, use_container_width=True)
             
         st.subheader("Sebaran Lama Pernikahan di Kecamatan (Sesuai Filter)")
-        fig_boxplot = px.box(df_filtered, x='domisili_penggugat', y='umur_pernikahan_tahun', color='domisili_penggugat', title="Karakteristik Usia Nikah per Kecamatan")
+        fig_boxplot = px.box(df_filtered, x='domisili_penggugat', y='umur_pernikahan_tahun', color='domisili_penggugat')
         fig_boxplot.update_layout(showlegend=False)
         st.plotly_chart(fig_boxplot, use_container_width=True)
 
@@ -168,7 +166,6 @@ else:
                 jumlah_alasan_counts, 
                 names=jumlah_alasan_counts.index, 
                 values=jumlah_alasan_counts.values, 
-                title="<b>Distribusi Jumlah Alasan Perceraian per Kasus</b>", 
                 hole=.3
             )
             # PERBAIKAN: Menambahkan persentase + label di dalam pie
@@ -183,8 +180,7 @@ else:
             x='alasan', 
             y='jumlah', 
             color='jenis_kelamin_penggugat', 
-            barmode='group', 
-            title="<b>Perbedaan Alasan Cerai Berdasarkan Gender</b>",
+            barmode='group',
             color_discrete_map=color_map,
             text_auto=True
         )
@@ -202,8 +198,7 @@ else:
             color=usia_nikah_counts.values, 
             color_continuous_scale='greens', 
             labels={'x':'Grup Lama Pernikahan', 'y':'Jumlah Kasus'},
-            text_auto=True,
-            title="<b>Perceraian Paling Rawan Terjadi pada 5 Tahun Pertama</b>"
+            text_auto=True
         )
         st.plotly_chart(fig_usia_nikah, use_container_width=True)
         
@@ -215,8 +210,7 @@ else:
             alasan_proporsi, 
             x=alasan_proporsi.index, 
             y=alasan_proporsi.columns, 
-            template='plotly_white', 
-            title="<b>Masalah Ekonomi Cenderung Meningkat pada Pernikahan Lama</b>", 
+            template='plotly_white',
             barmode='stack'
         )
         # PERBAIKAN: Mengubah format sumbu Y menjadi persentase
@@ -234,8 +228,7 @@ else:
             x=monthly_counts.index, 
             y=monthly_counts.values, 
             markers=True, 
-            labels={'x': 'Bulan', 'y': 'Jumlah Kasus'},
-            title="<b>Puncak Kasus Terjadi di Bulan Agustus</b>"
+            labels={'x': 'Bulan', 'y': 'Jumlah Kasus'}
         )
         fig_tren.update_traces(line_color='royalblue', line_width=3)
         # PERBAIKAN: Anotasi untuk menyorot titik puncak
@@ -256,8 +249,7 @@ else:
             color=daily_counts.values, 
             color_continuous_scale='viridis', 
             labels={'x':'Hari', 'y':'Jumlah Kasus'},
-            text_auto=True,
-            title="<b>Kamis Merupakan Hari Paling Sibuk untuk Putusan Cerai</b>"
+            text_auto=True
         )
         st.plotly_chart(fig_hari, use_container_width=True)
 
