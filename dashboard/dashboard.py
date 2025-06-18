@@ -124,7 +124,7 @@ else:
             st.plotly_chart(fig_domisili, use_container_width=True)
             
         with col_t1_2:
-            st.subheader("Profil Penggugat")
+            st.subheader("Proporsi Gender Penggugat")
             fig_gender = px.pie(
                 df_filtered, 
                 names='jenis_kelamin_penggugat', 
