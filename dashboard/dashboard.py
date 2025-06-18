@@ -16,31 +16,37 @@ st.set_page_config(
 # --- FUNGSI UNTUK MEMUAT DAN MEMBERSIHKAN DATA (VERSI FINAL) ---
 @st.cache_data
 def load_and_clean_data():
-    df = pd.read_csv("Dataset-Perceraian.csv")
+    try:
+        # Ganti "Dataset-Perceraian.csv" dengan path file Anda yang sebenarnya
+        df = pd.read_csv("Dataset-Perceraian.csv")
+    except FileNotFoundError:
+        st.error("File 'Dataset-Perceraian.csv' tidak ditemukan. Mohon pastikan file tersebut berada di direktori yang sama dengan script Anda.")
+        return pd.DataFrame() # Mengembalikan dataframe kosong jika file tidak ada
+
     df.columns = ['no_putusan', 'domisili_penggugat', 'jenis_kelamin_penggugat',
                   'jenis_kelamin_tergugat', 'tanggal_pernikahan', 'tanggal_putusan',
                   'umur_pernikahan_tahun', 'umur_pernikahan_bulan', 'pertengkaran',
                   'perselingkuhan', 'kdrt', 'ekonomi', 'amar_putusan']
-    
+
     df['umur_pernikahan_tahun'] = df['umur_pernikahan_tahun'].str.extract('(\d+)').astype(float)
     df['tanggal_putusan'] = pd.to_datetime(df['tanggal_putusan'], format='%d-%b-%y', errors='coerce')
     df.dropna(subset=['tanggal_putusan', 'umur_pernikahan_tahun'], inplace=True)
-    
+
     for col in ['domisili_penggugat', 'jenis_kelamin_penggugat', 'amar_putusan']:
         df[col] = df[col].str.upper()
 
     df['jenis_kelamin_penggugat'] = df['jenis_kelamin_penggugat'].replace('TIDAK DIKETAHUI', 'PEREMPUAN')
-        
+
     for col in ['pertengkaran', 'perselingkuhan', 'kdrt', 'ekonomi']:
         df[col] = df[col].astype(int)
-        
+
     df['bulan_putusan'] = df['tanggal_putusan'].dt.month_name()
     df['hari_putusan'] = df['tanggal_putusan'].dt.day_name()
-    
+
     bins = [0, 5, 10, 15, 20, np.inf]
     labels = ['0-5 Thn', '6-10 Thn', '11-15 Thn', '16-20 Thn', '20+ Thn']
     df['grup_usia_nikah'] = pd.cut(df['umur_pernikahan_tahun'], bins=bins, labels=labels, right=False)
-    
+
     kecamatan_counts = df['domisili_penggugat'].value_counts()
     threshold = 5
     kecamatan_lainnya = kecamatan_counts[kecamatan_counts < threshold].index
@@ -53,12 +59,16 @@ def load_and_clean_data():
         df['grup_usia_nikah'] = df['grup_usia_nikah'].cat.add_categories(['Lain-lain'])
         df.loc[df['grup_usia_nikah'].isin(repl_usia), 'grup_usia_nikah'] = 'Lain-lain'
         df['grup_usia_nikah'] = df['grup_usia_nikah'].cat.remove_unused_categories()
-    
+
     df['jumlah_alasan'] = df[['pertengkaran', 'ekonomi', 'perselingkuhan', 'kdrt']].sum(axis=1)
 
     return df
 
 df = load_and_clean_data()
+
+# Jangan jalankan sisa kode jika dataframe kosong
+if df.empty:
+    st.stop()
 
 # --- SIDEBAR INTERAKTIF ---
 st.sidebar.header("🔍 Filter Interaktif")
@@ -85,7 +95,8 @@ if total_kasus > 0:
     avg_umur_nikah = df_filtered['umur_pernikahan_tahun'].mean()
     persen_wanita = (df_filtered['jenis_kelamin_penggugat'] == 'PEREMPUAN').sum() / total_kasus * 100
 else:
-    avg_umur_nikah = 0; persen_wanita = 0
+    avg_umur_nikah = 0
+    persen_wanita = 0
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Kasus (Sesuai Filter)", f"{total_kasus}")
 col2.metric("Rata-rata Usia Pernikahan", f"{avg_umur_nikah:.1f} Tahun")
@@ -108,32 +119,36 @@ else:
         with col_t1_1:
             st.subheader("Peta Sebaran Kasus per Kecamatan")
             kasus_kecamatan = df_filtered['domisili_penggugat'].value_counts()
-            
-            # PERBAIKAN: Menambahkan label angka & judul bercerita
+
+            # PERBAIKAN 1: Memberikan label yang jelas pada sumbu x dan y
             fig_domisili = px.bar(
-                kasus_kecamatan, 
-                y=kasus_kecamatan.index, 
-                x=kasus_kecamatan.values, 
+                kasus_kecamatan,
+                y=kasus_kecamatan.index,
+                x=kasus_kecamatan.values,
                 orientation='h',
                 text_auto=True,
-                color=kasus_kecamatan.values, 
-                color_continuous_scale='blues'
+                color=kasus_kecamatan.values,
+                color_continuous_scale='blues',
+                labels={
+                    'y': 'Domisili Penggugat',
+                    'x': 'Jumlah Kasus'
+                }
             )
             fig_domisili.update_layout(yaxis={'categoryorder':'total ascending'}, coloraxis_showscale=False)
             fig_domisili.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
             st.plotly_chart(fig_domisili, use_container_width=True)
-            
+
         with col_t1_2:
             st.subheader("Proporsi Gender Penggugat")
             fig_gender = px.pie(
-                df_filtered, 
-                names='jenis_kelamin_penggugat', 
-                hole=.3, 
+                df_filtered,
+                names='jenis_kelamin_penggugat',
+                hole=.3,
                 color_discrete_sequence=px.colors.qualitative.Set2
             )
             fig_gender.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(fig_gender, use_container_width=True)
-            
+
         st.subheader("Sebaran Lama Pernikahan di Kecamatan (Sesuai Filter)")
         fig_boxplot = px.box(df_filtered, x='domisili_penggugat', y='umur_pernikahan_tahun', color='domisili_penggugat')
         fig_boxplot.update_layout(showlegend=False)
@@ -144,42 +159,45 @@ else:
         col_t2_1, col_t2_2 = st.columns(2)
         with col_t2_1:
             st.subheader("Pemicu Utama Perceraian")
-            alasan_counts = pd.Series({'Pertengkaran': df_filtered['pertengkaran'].sum(), 'Ekonomi': df_filtered['ekonomi'].sum(),
-                                       'Perselingkuhan': df_filtered['perselingkuhan'].sum(), 'KDRT': df_filtered['kdrt'].sum()}).sort_values(ascending=False)
+            alasan_counts = pd.Series({
+                'Pertengkaran': df_filtered['pertengkaran'].sum(),
+                'Ekonomi': df_filtered['ekonomi'].sum(),
+                'Perselingkuhan': df_filtered['perselingkuhan'].sum(),
+                'KDRT': df_filtered['kdrt'].sum()
+            }).sort_values(ascending=False)
             fig_alasan = px.bar(
-                alasan_counts, 
-                x=alasan_counts.index, 
-                y=alasan_counts.values, 
-                color=alasan_counts.values, 
+                alasan_counts,
+                x=alasan_counts.index,
+                y=alasan_counts.values,
+                color=alasan_counts.values,
                 color_continuous_scale='plasma',
                 text_auto=True
             )
             fig_alasan.update_traces(textfont_size=12, textangle=0)
             st.plotly_chart(fig_alasan, use_container_width=True)
-            
+
         with col_t2_2:
             st.subheader("Kompleksitas Masalah per Kasus")
             jumlah_alasan_counts = df_filtered['jumlah_alasan'].value_counts()
             jumlah_alasan_counts.index = jumlah_alasan_counts.index.map(lambda x: f"{x} Alasan" if x > 0 else "Tidak Ada Data")
-            
+
             fig_jml_alasan = px.pie(
-                jumlah_alasan_counts, 
-                names=jumlah_alasan_counts.index, 
-                values=jumlah_alasan_counts.values, 
+                jumlah_alasan_counts,
+                names=jumlah_alasan_counts.index,
+                values=jumlah_alasan_counts.values,
                 hole=.3
             )
-            # PERBAIKAN: Menambahkan persentase + label di dalam pie
             fig_jml_alasan.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(fig_jml_alasan, use_container_width=True)
-            
+
         st.subheader("Perbandingan Alasan Cerai antara Penggugat Laki-laki & Perempuan")
         gender_alasan_melted = df_filtered.groupby('jenis_kelamin_penggugat')[['pertengkaran', 'ekonomi', 'perselingkuhan', 'kdrt']].sum().reset_index().melt(id_vars='jenis_kelamin_penggugat', var_name='alasan', value_name='jumlah')
         color_map = {'PEREMPUAN': '#FF6347', 'LAKI LAKI': '#1E90FF'}
         fig_gender_alasan = px.bar(
-            gender_alasan_melted, 
-            x='alasan', 
-            y='jumlah', 
-            color='jenis_kelamin_penggugat', 
+            gender_alasan_melted,
+            x='alasan',
+            y='jumlah',
+            color='jenis_kelamin_penggugat',
             barmode='group',
             color_discrete_map=color_map,
             text_auto=True
@@ -192,29 +210,36 @@ else:
         st.subheader("Distribusi Kasus Berdasarkan Grup Usia Pernikahan")
         usia_nikah_counts = df_filtered['grup_usia_nikah'].value_counts().sort_index()
         fig_usia_nikah = px.bar(
-            usia_nikah_counts, 
-            x=usia_nikah_counts.index, 
-            y=usia_nikah_counts.values, 
-            color=usia_nikah_counts.values, 
-            color_continuous_scale='greens', 
+            usia_nikah_counts,
+            x=usia_nikah_counts.index,
+            y=usia_nikah_counts.values,
+            color=usia_nikah_counts.values,
+            color_continuous_scale='greens',
             labels={'x':'Grup Lama Pernikahan', 'y':'Jumlah Kasus'},
             text_auto=True
         )
         st.plotly_chart(fig_usia_nikah, use_container_width=True)
-        
+
         st.subheader("Perubahan Tren Alasan Seiring Lamanya Pernikahan")
         alasan_by_usia = df_filtered.groupby('grup_usia_nikah', observed=True)[['pertengkaran', 'ekonomi', 'perselingkuhan', 'kdrt']].sum()
         alasan_sum = alasan_by_usia.sum(axis=1)
         alasan_proporsi = alasan_by_usia.div(alasan_sum, axis=0).fillna(0)
+
+        # PERBAIKAN 2: Menggunakan texttemplate untuk menampilkan persentase di dalam bar
         fig_proporsi = px.bar(
-            alasan_proporsi, 
-            x=alasan_proporsi.index, 
-            y=alasan_proporsi.columns, 
+            alasan_proporsi,
+            x=alasan_proporsi.index,
+            y=alasan_proporsi.columns,
             template='plotly_white',
-            barmode='stack'
+            barmode='stack',
+            text_auto='.0%' # Format teks sebagai persentase
         )
-        # PERBAIKAN: Mengubah format sumbu Y menjadi persentase
-        fig_proporsi.update_layout(yaxis_tickformat='.0%')
+        # Mengubah format sumbu Y menjadi persentase dan memperbarui posisi teks
+        fig_proporsi.update_layout(
+            yaxis_tickformat='.0%',
+            legend_title_text='Alasan Perceraian'
+        )
+        fig_proporsi.update_traces(textposition='inside')
         st.plotly_chart(fig_proporsi, use_container_width=True)
 
     with tab4:
@@ -224,30 +249,30 @@ else:
         df_filtered['bulan_putusan'] = pd.Categorical(df_filtered['bulan_putusan'], categories=bulan_order, ordered=True)
         monthly_counts = df_filtered['bulan_putusan'].value_counts().sort_index()
         fig_tren = px.line(
-            monthly_counts, 
-            x=monthly_counts.index, 
-            y=monthly_counts.values, 
-            markers=True, 
+            monthly_counts,
+            x=monthly_counts.index,
+            y=monthly_counts.values,
+            markers=True,
             labels={'x': 'Bulan', 'y': 'Jumlah Kasus'}
         )
         fig_tren.update_traces(line_color='royalblue', line_width=3)
-        # PERBAIKAN: Anotasi untuk menyorot titik puncak
+        # Anotasi untuk menyorot titik puncak
         if not monthly_counts.empty:
             puncak_bulan = monthly_counts.idxmax()
             puncak_nilai = monthly_counts.max()
             fig_tren.add_annotation(x=puncak_bulan, y=puncak_nilai, text=f"Puncak: {puncak_nilai}", showarrow=True, arrowhead=2, ax=0, ay=-40)
         st.plotly_chart(fig_tren, use_container_width=True)
-        
+
         st.subheader("Pola Putusan Berdasarkan Hari dalam Seminggu")
         hari_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         df_filtered['hari_putusan'] = pd.Categorical(df_filtered['hari_putusan'], categories=hari_order, ordered=True)
         daily_counts = df_filtered['hari_putusan'].value_counts().sort_index()
         fig_hari = px.bar(
-            daily_counts, 
-            x=daily_counts.index, 
-            y=daily_counts.values, 
-            color=daily_counts.values, 
-            color_continuous_scale='viridis', 
+            daily_counts,
+            x=daily_counts.index,
+            y=daily_counts.values,
+            color=daily_counts.values,
+            color_continuous_scale='viridis',
             labels={'x':'Hari', 'y':'Jumlah Kasus'},
             text_auto=True
         )
