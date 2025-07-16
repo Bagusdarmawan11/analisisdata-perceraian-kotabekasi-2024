@@ -13,24 +13,28 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- FUNGSI UNTUK MEMUAT DAN MEMBERSIHKAN DATA (VERSI FINAL) ---
+# --- FUNGSI UNTUK MEMUAT DAN MEMBERSIHKAN DATA (VERSI PERBAIKAN FINAL) ---
 @st.cache_data
 def load_and_clean_data():
     try:
-        # Ganti "Dataset-Perceraian.csv" dengan path file Anda yang sebenarnya
         df = pd.read_csv("Dataset-Perceraian.csv")
     except FileNotFoundError:
         st.error("File 'Dataset-Perceraian.csv' tidak ditemukan. Mohon pastikan file tersebut berada di direktori yang sama dengan script Anda.")
-        return pd.DataFrame() # Mengembalikan dataframe kosong jika file tidak ada
+        return pd.DataFrame()
 
     df.columns = ['no_putusan', 'domisili_penggugat', 'jenis_kelamin_penggugat',
                   'jenis_kelamin_tergugat', 'tanggal_pernikahan', 'tanggal_putusan',
                   'umur_pernikahan_tahun', 'umur_pernikahan_bulan', 'pertengkaran',
                   'perselingkuhan', 'kdrt', 'ekonomi', 'amar_putusan']
 
-    df['umur_pernikahan_tahun'] = df['umur_pernikahan_tahun'].str.extract('(\d+)').astype(float)
+    # --- PERBAIKAN DI SINI ---
+    # Menggunakan str.extract untuk mengambil angka dari kolom teks, ini lebih kuat
+    df['umur_pernikahan_tahun'] = df['umur_pernikahan_tahun'].astype(str).str.extract('(\d+)').astype(float)
+    
+    # Konversi dan pembersihan data lainnya
     df['tanggal_putusan'] = pd.to_datetime(df['tanggal_putusan'], format='%d-%b-%y', errors='coerce')
     df.dropna(subset=['tanggal_putusan', 'umur_pernikahan_tahun'], inplace=True)
+    df['umur_pernikahan_tahun'] = df['umur_pernikahan_tahun'].astype(int)
 
     for col in ['domisili_penggugat', 'jenis_kelamin_penggugat', 'amar_putusan']:
         df[col] = df[col].str.upper()
@@ -38,28 +42,23 @@ def load_and_clean_data():
     df['jenis_kelamin_penggugat'] = df['jenis_kelamin_penggugat'].replace('TIDAK DIKETAHUI', 'PEREMPUAN')
 
     for col in ['pertengkaran', 'perselingkuhan', 'kdrt', 'ekonomi']:
-        df[col] = df[col].astype(int)
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
 
     df['bulan_putusan'] = df['tanggal_putusan'].dt.month_name()
     df['hari_putusan'] = df['tanggal_putusan'].dt.day_name()
-
-    bins = [0, 5, 10, 15, 20, np.inf]
-    labels = ['0-5 Thn', '6-10 Thn', '11-15 Thn', '16-20 Thn', '20+ Thn']
-    df['grup_usia_nikah'] = pd.cut(df['umur_pernikahan_tahun'], bins=bins, labels=labels, right=False)
-
+    
+    # Mendefinisikan bins dan labels yang lebih detail untuk usia pernikahan
+    bins = [-1, 5, 10, 15, 20, 25, 30, 35, np.inf]
+    labels = ['0-5 Thn', '6-10 Thn', '11-15 Thn', '16-20 Thn', '21-25 Thn', '26-30 Thn', '31-35 Thn', '>35 Thn']
+    df['grup_usia_nikah'] = pd.cut(df['umur_pernikahan_tahun'], bins=bins, labels=labels, right=True)
+    
+    # Mengelompokkan kecamatan dengan jumlah kasus sedikit ke 'LAIN-LAIN'
     kecamatan_counts = df['domisili_penggugat'].value_counts()
     threshold = 5
     kecamatan_lainnya = kecamatan_counts[kecamatan_counts < threshold].index
     df['domisili_penggugat'] = df['domisili_penggugat'].replace(kecamatan_lainnya, 'LAIN-LAIN')
-
-    usia_nikah_counts = df['grup_usia_nikah'].value_counts()
-    threshold_usia = 20
-    repl_usia = usia_nikah_counts[usia_nikah_counts < threshold_usia].index
-    if not repl_usia.empty:
-        df['grup_usia_nikah'] = df['grup_usia_nikah'].cat.add_categories(['Lain-lain'])
-        df.loc[df['grup_usia_nikah'].isin(repl_usia), 'grup_usia_nikah'] = 'Lain-lain'
-        df['grup_usia_nikah'] = df['grup_usia_nikah'].cat.remove_unused_categories()
-
+    
+    # Menghitung jumlah alasan perceraian
     df['jumlah_alasan'] = df[['pertengkaran', 'ekonomi', 'perselingkuhan', 'kdrt']].sum(axis=1)
 
     return df
@@ -74,6 +73,8 @@ if df.empty:
 st.sidebar.header("🔍 Filter Interaktif")
 kecamatan_options = ['Semua Kecamatan'] + sorted(df['domisili_penggugat'].unique().tolist())
 selected_kecamatan = st.sidebar.selectbox('Pilih Kecamatan:', kecamatan_options)
+
+# Filter usia pernikahan sekarang menggunakan kategori baru yang sudah detail
 grup_usia_options = ['Semua Grup'] + df['grup_usia_nikah'].cat.categories.tolist()
 selected_grup_usia = st.sidebar.selectbox('Pilih Lama Pernikahan:', grup_usia_options)
 
@@ -119,8 +120,6 @@ else:
         with col_t1_1:
             st.subheader("Peta Sebaran Kasus per Kecamatan")
             kasus_kecamatan = df_filtered['domisili_penggugat'].value_counts()
-
-            # PERBAIKAN 1: Memberikan label yang jelas pada sumbu x dan y
             fig_domisili = px.bar(
                 kasus_kecamatan,
                 y=kasus_kecamatan.index,
@@ -129,10 +128,7 @@ else:
                 text_auto=True,
                 color=kasus_kecamatan.values,
                 color_continuous_scale='blues',
-                labels={
-                    'y': 'Domisili Penggugat',
-                    'x': 'Jumlah Kasus'
-                }
+                labels={'y': 'Domisili Penggugat', 'x': 'Jumlah Kasus'}
             )
             fig_domisili.update_layout(yaxis={'categoryorder':'total ascending'}, coloraxis_showscale=False)
             fig_domisili.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
@@ -151,7 +147,7 @@ else:
 
         st.subheader("Sebaran Lama Pernikahan di Kecamatan (Sesuai Filter)")
         fig_boxplot = px.box(df_filtered, x='domisili_penggugat', y='umur_pernikahan_tahun', color='domisili_penggugat')
-        fig_boxplot.update_layout(showlegend=False)
+        fig_boxplot.update_layout(showlegend=False, xaxis_title="Kecamatan", yaxis_title="Lama Pernikahan (Tahun)")
         st.plotly_chart(fig_boxplot, use_container_width=True)
 
     with tab2:
@@ -171,8 +167,10 @@ else:
                 y=alasan_counts.values,
                 color=alasan_counts.values,
                 color_continuous_scale='plasma',
-                text_auto=True
+                text_auto=True,
+                labels={'x': 'Alasan Utama', 'y': 'Jumlah Kasus'}
             )
+            fig_alasan.update_layout(coloraxis_showscale=False)
             fig_alasan.update_traces(textfont_size=12, textangle=0)
             st.plotly_chart(fig_alasan, use_container_width=True)
 
@@ -180,7 +178,6 @@ else:
             st.subheader("Kompleksitas Masalah per Kasus")
             jumlah_alasan_counts = df_filtered['jumlah_alasan'].value_counts()
             jumlah_alasan_counts.index = jumlah_alasan_counts.index.map(lambda x: f"{x} Alasan" if x > 0 else "Tidak Ada Data")
-
             fig_jml_alasan = px.pie(
                 jumlah_alasan_counts,
                 names=jumlah_alasan_counts.index,
@@ -200,15 +197,27 @@ else:
             color='jenis_kelamin_penggugat',
             barmode='group',
             color_discrete_map=color_map,
-            text_auto=True
+            text_auto=True,
+            labels={'alasan': 'Alasan Perceraian', 'jumlah': 'Jumlah Kasus', 'jenis_kelamin_penggugat': 'Gender Penggugat'}
         )
         fig_gender_alasan.update_traces(textfont_size=12, textangle=0, textposition="outside")
         st.plotly_chart(fig_gender_alasan, use_container_width=True)
-
+    
+    # --- PERUBAHAN VISUALISASI DI TAB 3 ---
     with tab3:
         st.header("Analisis Berdasarkan Lama Pernikahan")
+
+        # 1. Filter data untuk menyembunyikan kategori '>35 Thn'
+        df_tab3 = df_filtered[df_filtered['grup_usia_nikah'] != '>35 Thn'].copy()
+
+        # 2. Definisikan urutan kategori yang akan ditampilkan
+        usia_order = ['0-5 Thn', '6-10 Thn', '11-15 Thn', '16-20 Thn', '21-25 Thn', '26-30 Thn', '31-35 Thn']
+
+        # --- GRAFIK 1: Distribusi Kasus (Vertical Bar Chart) ---
         st.subheader("Distribusi Kasus Berdasarkan Grup Usia Pernikahan")
-        usia_nikah_counts = df_filtered['grup_usia_nikah'].value_counts().sort_index()
+        
+        usia_nikah_counts = df_tab3['grup_usia_nikah'].value_counts().reindex(usia_order).fillna(0)
+        
         fig_usia_nikah = px.bar(
             usia_nikah_counts,
             x=usia_nikah_counts.index,
@@ -218,29 +227,38 @@ else:
             labels={'x':'Grup Lama Pernikahan', 'y':'Jumlah Kasus'},
             text_auto=True
         )
+        fig_usia_nikah.update_layout(coloraxis_showscale=False)
         st.plotly_chart(fig_usia_nikah, use_container_width=True)
 
+        # --- GRAFIK 2: Proporsi Alasan (100% Stacked Bar Chart) ---
         st.subheader("Perubahan Tren Alasan Seiring Lamanya Pernikahan")
-        alasan_by_usia = df_filtered.groupby('grup_usia_nikah', observed=True)[['pertengkaran', 'ekonomi', 'perselingkuhan', 'kdrt']].sum()
+        alasan_cols = ['pertengkaran', 'ekonomi', 'perselingkuhan', 'kdrt']
+        
+        # PERBAIKAN: Hapus argumen 'observed=False' dari baris di bawah ini
+        alasan_by_usia = df_tab3.groupby('grup_usia_nikah')[alasan_cols].sum().reindex(usia_order).fillna(0)
+        
         alasan_sum = alasan_by_usia.sum(axis=1)
-        alasan_proporsi = alasan_by_usia.div(alasan_sum, axis=0).fillna(0)
+        alasan_proporsi = alasan_by_usia.divide(alasan_sum, axis=0).fillna(0)
 
-        # PERBAIKAN 2: Menggunakan texttemplate untuk menampilkan persentase di dalam bar
         fig_proporsi = px.bar(
             alasan_proporsi,
             x=alasan_proporsi.index,
             y=alasan_proporsi.columns,
             template='plotly_white',
             barmode='stack',
-            text_auto='.0%' # Format teks sebagai persentase
+            text_auto='.0%'
         )
-        # Mengubah format sumbu Y menjadi persentase dan memperbarui posisi teks
         fig_proporsi.update_layout(
             yaxis_tickformat='.0%',
-            legend_title_text='Alasan Perceraian'
+            legend_title_text='Alasan Perceraian',
+            xaxis_title='Lama Pernikahan (Grup Tahun)',
+            yaxis_title='Proporsi Alasan'
         )
         fig_proporsi.update_traces(textposition='inside')
+        fig_proporsi.update_xaxes(categoryorder='array', categoryarray=usia_order)
+        
         st.plotly_chart(fig_proporsi, use_container_width=True)
+
 
     with tab4:
         st.header("Analisis Pola Berdasarkan Waktu")
@@ -256,7 +274,6 @@ else:
             labels={'x': 'Bulan', 'y': 'Jumlah Kasus'}
         )
         fig_tren.update_traces(line_color='royalblue', line_width=3)
-        # Anotasi untuk menyorot titik puncak
         if not monthly_counts.empty:
             puncak_bulan = monthly_counts.idxmax()
             puncak_nilai = monthly_counts.max()
